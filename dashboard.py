@@ -8,7 +8,7 @@ import ast
 from collections import Counter
 
 
-filename = "cleanest_aircraft_data_without_NLP.csv"
+filename = "cleanest_df_with_NLP.csv"
 
 from PIL import Image
 
@@ -80,51 +80,6 @@ if fm == "Single Year":
     period_label = str(sy)
 else:
     period_label = f"{sr[0]} – {sr[1]}"
-
-# -------------------------------------------------
-# Dummy Damage_Areas for prototyping
-# -------------------------------------------------
-damage_patterns = [
-    [],                              # no specific area recorded
-    ["engine"],
-    ["wing"],
-    ["tail"],
-    ["nose"],
-    ["fuselage"],
-    ["landing gear"],
-    ["engine", "wing"],
-    ["engine", "tail"],
-    ["wing", "fuselage"],
-]
-
-# simple deterministic assignment, cycles through patterns
-df["Damage_Areas"] = [
-    damage_patterns[i % len(damage_patterns)] for i in range(len(df))
-]
-
-# dummy for flags
-
-np.random.seed(42)
-
-cause_cols = [
-    "is_engine_cause",
-    "is_model_cause",
-    "is_human_cause",
-    "is_weather_cause",
-    "is_wildlife_cause",
-    "is_ground_collision",
-    "is_unknown_cause",
-]
-
-# random 0/1 with ~30% chance of being 1
-rand_matrix = np.random.rand(len(df), len(cause_cols))
-df[cause_cols] = (rand_matrix < 0.3).astype(int)
-
-# ensure at least one cause per row → if all zero, mark unknown as 1
-mask_no_cause = df[cause_cols].sum(axis=1) == 0
-df.loc[mask_no_cause, "is_unknown_cause"] = 1
-
-
 
 
 # -------------------------------------------------
