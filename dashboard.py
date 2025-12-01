@@ -1172,57 +1172,57 @@ with right_col:
                 st.plotly_chart(fig, use_container_width=True, config={"staticPlot": True})
 
 
-# ==============================
-# Cause Correlation Heatmap
-# ==============================
+# # ==============================
+# # Cause Correlation Heatmap
+# # ==============================
 
-st.subheader("Cause Correlation Map")
+# st.subheader("Cause Correlation Map")
 
-cause_cols = [
-    "is_engine_cause",
-    "is_model_cause",
-    "is_human_cause",
-    "is_weather_cause",
-    "is_wildlife_cause",
-    "is_ground_collision",
-    "is_unknown_cause",
-]
+# cause_cols = [
+#     "is_engine_cause",
+#     "is_model_cause",
+#     "is_human_cause",
+#     "is_weather_cause",
+#     "is_wildlife_cause",
+#     "is_ground_collision",
+#     "is_unknown_cause",
+# ]
 
-# keep only existing columns (future-proofing)
-available_cols = [c for c in cause_cols if c in filtered_df.columns]
+# # keep only existing columns (future-proofing)
+# available_cols = [c for c in cause_cols if c in filtered_df.columns]
 
-if len(available_cols) < 2:
-    st.info("Not enough cause variables to compute correlation.")
-else:
-    corr_matrix = filtered_df[available_cols].corr(method="pearson")
+# if len(available_cols) < 2:
+#     st.info("Not enough cause variables to compute correlation.")
+# else:
+#     corr_matrix = filtered_df[available_cols].corr(method="pearson")
 
-    # rename columns for readability in chart
-    pretty_names = {
-        "is_engine_cause": "Engine Failure",
-        "is_model_cause": "Aircraft Design",
-        "is_human_cause": "Human Error",
-        "is_weather_cause": "Bad Weather",
-        "is_wildlife_cause": "Wildlife Strike",
-        "is_ground_collision": "Ground Collision",
-        "is_unknown_cause": "Unknown Cause",
-    }
-    corr_matrix = corr_matrix.rename(index=pretty_names, columns=pretty_names)
+#     # rename columns for readability in chart
+#     pretty_names = {
+#         "is_engine_cause": "Engine Failure",
+#         "is_model_cause": "Aircraft Design",
+#         "is_human_cause": "Human Error",
+#         "is_weather_cause": "Bad Weather",
+#         "is_wildlife_cause": "Wildlife Strike",
+#         "is_ground_collision": "Ground Collision",
+#         "is_unknown_cause": "Unknown Cause",
+#     }
+#     corr_matrix = corr_matrix.rename(index=pretty_names, columns=pretty_names)
 
-    # heatmap
-    fig_corr = px.imshow(
-        corr_matrix,
-        text_auto=True,
-        color_continuous_scale="RdBu",
-        zmin=-1,
-        zmax=1,
-        aspect="auto",
-    )
+#     # heatmap
+#     fig_corr = px.imshow(
+#         corr_matrix,
+#         text_auto=True,
+#         color_continuous_scale="RdBu",
+#         zmin=-1,
+#         zmax=1,
+#         aspect="auto",
+#     )
 
-    fig_corr.update_layout(
-        height=430,
-        margin=dict(l=10, r=10, t=30, b=10),
-        coloraxis_colorbar=dict(title="Correlation"),
-    )
+#     fig_corr.update_layout(
+#         height=430,
+#         margin=dict(l=10, r=10, t=30, b=10),
+#         coloraxis_colorbar=dict(title="Correlation"),
+#     )
 
-    st.plotly_chart(fig_corr, use_container_width=True)
+#     st.plotly_chart(fig_corr, use_container_width=True)
 
