@@ -218,8 +218,8 @@ if st.session_state["view"] == "details":
     with col1:
         st.subheader("Engine Failure by Engine Model")
 
-        if "Engine_Model_Standardized" in df.columns and "is_engine_cause" in df.columns:
-            eng_fail = df[df["is_engine_cause"] == 1].copy()
+        if "Engine_Model_Standardized" in filtered_df.columns and "is_engine_cause" in filtered_df.columns:
+            eng_fail = filtered_df[filtered_df["is_engine_cause"] == 1].copy()
             if eng_fail.empty:
                 st.info("No incidents with engine failure cause flagged.")
             else:
@@ -281,8 +281,8 @@ if st.session_state["view"] == "details":
     with col2:
         st.subheader("Aircraft Design Issues by Model")
 
-        if "Aircaft_Model" in df.columns and "is_model_cause" in df.columns:
-            model_fail = df[df["is_model_cause"] == 1].copy()
+        if "Aircaft_Model" in filtered_df.columns and "is_model_cause" in filtered_df.columns:
+            model_fail = filtered_df[filtered_df["is_model_cause"] == 1].copy()
             if model_fail.empty:
                 st.info("No incidents with aircraft design cause flagged.")
             else:
@@ -350,9 +350,9 @@ if st.session_state["view"] == "details":
             "is_model_cause",
             "is_human_cause",
         ]
-        if all(c in df.columns for c in needed_cols):
+        if all(c in filtered_df.columns for c in needed_cols):
             op_group = (
-                df.groupby("Aircaft_Operator")
+                filtered_df.groupby("Aircaft_Operator")
                   .agg(
                       engine_failures=("is_engine_cause", "sum"),
                       model_issues=("is_model_cause", "sum"),
@@ -471,6 +471,7 @@ with map_col:
 
         tooltip = {
             "text": "Location: {Incident_Location}\n"
+                    "Coords: ({Latitude}, {Longitude})\n"
                     "Nature: {Aircaft_Nature}\n"
                     "Damage: {Aircaft_Damage_Type}"
         }
@@ -622,78 +623,168 @@ with right_col:
     # 1) Incidents vs Year (left)
     # ==========================
     with trend_col:
-        st.subheader("Incidents Over Time by Severity")
+        # We will show different titles depending on filter mode
+        if filter_mode == "Single Year":
+            st.subheader(f"Incidents in {selected_year} by Month and Severity")
+        else:
+            st.subheader("Incidents Over Time by Severity")
 
-        if "Year" in filtered_df.columns and "Aircaft_Damage_Type" in filtered_df.columns:
-            # Map raw damage types to severity bands
-            def map_severity(d):
-                if d in ["Minor", "Repairable"]:
-                    return "Minor / Repairable"
-                elif d == "Substantial":
-                    return "Substantial"
-                elif d in ["Destroyed", "Missing"]:
-                    return "Destroyed / Missing"
-                else:
-                    return "Unknown"
+        has_damage = "Aircaft_Damage_Type" in filtered_df.columns
 
-            tmp = filtered_df.dropna(subset=["Year"]).copy()
+        # Map raw damage types to severity bands
+        def map_severity(d):
+            if d in ["Minor", "Repairable"]:
+                return "Minor / Repairable"
+            elif d == "Substantial":
+                return "Substantial"
+            elif d in ["Destroyed", "Missing"]:
+                return "Destroyed / Missing"
+            else:
+                return "Unknown"
+
+        if not has_damage:
+            st.info("No damage data available.")
+        else:
+            # Common severity mapping
+            tmp = filtered_df.copy()
             tmp["Damage_Severity"] = tmp["Aircaft_Damage_Type"].apply(map_severity)
 
-            damage_trend = (
-                tmp.groupby(["Year", "Damage_Severity"])
-                   .size()
-                   .reset_index(name="Count")
-                   .sort_values(["Year", "Damage_Severity"])
-            )
+            severity_order = [
+                "Minor / Repairable",
+                "Substantial",
+                "Destroyed / Missing",
+                "Unknown",
+            ]
+            color_map = {
+                "Minor / Repairable": "#2ca02c",   # green
+                "Substantial": "#ff7f0e",          # orange
+                "Destroyed / Missing": "#d62728",  # red
+                "Unknown": "#7f7f7f",              # grey
+            }
 
-            if damage_trend.empty:
-                st.info("No incidents for the selected filters.")
-            else:
-                severity_order = [
-                    "Minor / Repairable",
-                    "Substantial",
-                    "Destroyed / Missing",
-                    "Unknown",
-                ]
+            # ----------------------------------------
+            # CASE 1: Year Range → group by Year
+            # ----------------------------------------
+            if filter_mode == "Year Range":
+                if "Year" not in tmp.columns:
+                    st.info("No year information available.")
+                else:
+                    tmp = tmp.dropna(subset=["Year"])
+                    damage_trend = (
+                        tmp.groupby(["Year", "Damage_Severity"])
+                        .size()
+                        .reset_index(name="Count")
+                        .sort_values(["Year", "Damage_Severity"])
+                    )
 
-                color_map = {
-                    "Minor / Repairable": "#2ca02c",   # green
-                    "Substantial": "#ff7f0e",          # orange
-                    "Destroyed / Missing": "#d62728",  # red
-                    "Unknown": "#7f7f7f",              # grey
-                }
+                    if damage_trend.empty:
+                        st.info("No incidents for the selected filters.")
+                    else:
+                        fig_trend = px.area(
+                            damage_trend,
+                            x="Year",
+                            y="Count",
+                            color="Damage_Severity",
+                            category_orders={"Damage_Severity": severity_order},
+                            color_discrete_map=color_map,
+                        )
 
-                fig_trend = px.area(
-                    damage_trend,
-                    x="Year",
-                    y="Count",
-                    color="Damage_Severity",
-                    category_orders={"Damage_Severity": severity_order},
-                    color_discrete_map=color_map,
-                )
+                        fig_trend.update_layout(
+                            margin=dict(l=10, r=10, t=10, b=0),
+                            xaxis_title="Year",
+                            yaxis_title="Incident Count",
+                            height=260,
+                        )
 
-                fig_trend.update_layout(
-                    margin=dict(l=10, r=10, t=10, b=0),
-                    xaxis_title="Year",
-                    yaxis_title="Incident Count",
-                    height=260,
-                )
+                        yearly_totals = (
+                            damage_trend.groupby("Year")["Count"].sum().reset_index()
+                        )
+                        ymax = yearly_totals["Count"].max()
+                        fig_trend.update_yaxes(range=[0, ymax * 1.1])
 
-                # y-axis from 0 with small headroom
-                yearly_totals = (
-                    damage_trend.groupby("Year")["Count"].sum().reset_index()
-                )
-                ymax = yearly_totals["Count"].max()
-                fig_trend.update_yaxes(range=[0, ymax * 1.1])
+                        st.plotly_chart(
+                            fig_trend,
+                            use_container_width=True,
+                            config={"staticPlot": True},
+                        )
 
-                st.plotly_chart(fig_trend, use_container_width=True, config={"staticPlot": True})
-        else:
-            st.info("No year or damage data available.")
+            # ----------------------------------------
+            # CASE 2: Single Year → group by Month
+            # ----------------------------------------
+            else:  # filter_mode == "Single Year"
+                if "Incident_Date" not in tmp.columns:
+                    st.info("No incident date information available.")
+                else:
+                    # ensure datetime (defensive, though you already parse it at load)
+                    tmp["Incident_Date"] = pd.to_datetime(
+                        tmp["Incident_Date"], errors="coerce"
+                    )
+                    tmp = tmp.dropna(subset=["Incident_Date"])
+
+                    if tmp.empty:
+                        st.info("No incidents for the selected year.")
+                    else:
+                        tmp["Month"] = tmp["Incident_Date"].dt.month
+                        tmp["Month_Name"] = tmp["Incident_Date"].dt.month_name()
+
+                        # order months Jan–Dec
+                        month_order = [
+                            "January", "February", "March", "April",
+                            "May", "June", "July", "August",
+                            "September", "October", "November", "December",
+                        ]
+                        tmp["Month_Name"] = pd.Categorical(
+                            tmp["Month_Name"],
+                            categories=month_order,
+                            ordered=True,
+                        )
+
+                        month_trend = (
+                            tmp.groupby(["Month_Name", "Damage_Severity"])
+                            .size()
+                            .reset_index(name="Count")
+                            .sort_values(["Month_Name", "Damage_Severity"])
+                        )
+
+                        if month_trend.empty:
+                            st.info("No incidents for the selected year.")
+                        else:
+                            fig_trend = px.area(
+                                month_trend,
+                                x="Month_Name",
+                                y="Count",
+                                color="Damage_Severity",
+                                category_orders={
+                                    "Damage_Severity": severity_order,
+                                    "Month_Name": month_order,
+                                },
+                                color_discrete_map=color_map,
+                            )
+
+                            fig_trend.update_layout(
+                                margin=dict(l=10, r=10, t=10, b=80),
+                                xaxis_title="Month",
+                                yaxis_title="Incident Count",
+                                height=260,
+                            )
+
+                            monthly_totals = (
+                                month_trend.groupby("Month_Name")["Count"].sum().reset_index()
+                            )
+                            ymax = monthly_totals["Count"].max()
+                            fig_trend.update_yaxes(range=[0, ymax * 1.1])
+
+                            st.plotly_chart(
+                                fig_trend,
+                                use_container_width=True,
+                                config={"staticPlot": True},
+                            )
+
 
         # ==============================
         # Cause distribution bar chart
         # ==============================
-        st.markdown("<br>", unsafe_allow_html=True)
+        # st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("Likely Accident Causes")
 
         cause_cols = [
@@ -761,7 +852,7 @@ with right_col:
             fig_cause.update_traces(textposition="outside")
             fig_cause.update_layout(
                 height=260,
-                margin=dict(l=10, r=10, t=5, b=60),
+                margin=dict(l=10, r=10, t=0, b=60),
                 xaxis_title="",
                 yaxis_title="Number of Incidents",
                 showlegend=False,
