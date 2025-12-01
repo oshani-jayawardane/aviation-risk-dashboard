@@ -28,6 +28,17 @@ st.set_page_config(
     layout="wide"
 )
 
+st.markdown(
+    """
+    <style>
+        /* remove extra top padding */
+        .block-container {
+            padding-top: 1.5rem;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # -------------------------------------------------
 # 2. Data loading
@@ -48,6 +59,27 @@ df = load_data(filename)
 df["Year"] = df["Year"].astype("Int64")
 min_year = int(df["Year"].min())
 max_year = int(df["Year"].max())
+
+# ---------------------------------------------
+# Initialize filter state for use in the title
+# ---------------------------------------------
+if "filter_mode" not in st.session_state:
+    st.session_state["filter_mode"] = "Year Range"
+
+if "selected_year" not in st.session_state:
+    st.session_state["selected_year"] = max_year
+
+if "selected_range" not in st.session_state:
+    st.session_state["selected_range"] = (min_year, max_year)
+
+fm = st.session_state["filter_mode"]
+sy = st.session_state["selected_year"]
+sr = st.session_state["selected_range"]
+
+if fm == "Single Year":
+    period_label = str(sy)
+else:
+    period_label = f"{sr[0]} – {sr[1]}"
 
 # -------------------------------------------------
 # Dummy Damage_Areas for prototyping
@@ -100,12 +132,19 @@ df.loc[mask_no_cause, "is_unknown_cause"] = 1
 # -------------------------------------------------
 
 # Title
+# Title (reacts to current filter state)
 st.markdown(
-    "<h2 style='text-align: center; margin-bottom: 0.5rem; margin-top: 0rem;'>Aviation Risk Analysis Dashboard</h2>",
+    f"""
+    <h2 style='text-align: center; margin-bottom: 0.3rem; margin-top: 0rem;'>
+        Aviation Risk Analysis Dashboard ({period_label})
+    </h2>
+    """,
     unsafe_allow_html=True,
 )
-st.markdown("<hr style='margin-top:0.2rem;margin-bottom:0.8rem;'>", unsafe_allow_html=True)
-
+st.markdown(
+    "<hr style='margin-top:0.2rem;margin-bottom:0.8rem;'>",
+    unsafe_allow_html=True,
+)
 
 # -------------------------------------------------
 # 4. Compact Filters (Year + Nature)
@@ -129,7 +168,7 @@ def map_nature_group(x: str) -> str:
 df["Nature_Group"] = df["Aircaft_Nature"].astype(str).apply(map_nature_group)
 
 # ---------------- Horizontal filter layout ----------------
-col3, col1, col2 = st.columns([6, 2, 4])
+col3, col1, col2 = st.columns([6, 2, 3])
 
 # Filter mode: single year or range
 with col1:
@@ -138,6 +177,7 @@ with col1:
         ["Single Year", "Year Range"],
         horizontal=True,
         index=1,
+        key="filter_mode",
     )
 
 # Year slider
@@ -149,6 +189,7 @@ with col2:
             max_value=max_year,
             value=max_year,
             step=1,
+            key="selected_year",
             # label_visibility="collapsed",
         )
         year_mask = df["Year"] == selected_year
@@ -159,6 +200,7 @@ with col2:
             max_value=max_year,
             value=(min_year, max_year),
             step=1,
+            key="selected_range",
             # label_visibility="collapsed",
         )
         year_mask = df["Year"].between(selected_range[0], selected_range[1])
@@ -248,7 +290,7 @@ if st.session_state["view"] == "details":
                     margin=dict(l=10, r=10, t=40, b=30),
                 )
                 fig_eng.update_traces(textposition="outside")
-                st.plotly_chart(fig_eng, use_container_width=True)
+                st.plotly_chart(fig_eng, use_container_width=True, config={"staticPlot": True})
 
                 # ---------- Pie chart: Engine Manufacturer ----------
                 st.markdown("**Engine manufacturers in engine-failure incidents**")
@@ -272,7 +314,7 @@ if st.session_state["view"] == "details":
                         height=300,
                         margin=dict(l=10, r=10, t=10, b=10),
                     )
-                    st.plotly_chart(fig_eng_pie, use_container_width=True)
+                    st.plotly_chart(fig_eng_pie, use_container_width=True, config={"staticPlot": True})
                 else:
                     st.info("Engine_Manufacturer column not available for pie chart.")
         else:
@@ -311,7 +353,7 @@ if st.session_state["view"] == "details":
                     margin=dict(l=10, r=10, t=40, b=30),
                 )
                 fig_model.update_traces(textposition="outside")
-                st.plotly_chart(fig_model, use_container_width=True)
+                st.plotly_chart(fig_model, use_container_width=True, config={"staticPlot": True})
 
                 # ---------- Pie chart: Aircraft Manufacturer ----------
                 st.markdown("**Aircraft manufacturers in design-related incidents**")
@@ -334,7 +376,7 @@ if st.session_state["view"] == "details":
                         height=300,
                         margin=dict(l=10, r=10, t=10, b=10),
                     )
-                    st.plotly_chart(fig_air_pie, use_container_width=True)
+                    st.plotly_chart(fig_air_pie, use_container_width=True, config={"staticPlot": True})
                 else:
                     st.info("Aircraft_Manufacturer column not available for pie chart.")
         else:
@@ -407,7 +449,7 @@ if st.session_state["view"] == "details":
                     legend_title="Cause Type",
                 )
                 fig_op.update_traces(textposition="inside", insidetextanchor="middle")
-                st.plotly_chart(fig_op, use_container_width=True)
+                st.plotly_chart(fig_op, use_container_width=True, config={"staticPlot": True})
         else:
             st.info("Required columns for operator analysis are missing.")
 
@@ -424,7 +466,7 @@ if st.session_state["view"] == "details":
 # 5. map and analytics to the right
 # -------------------------------------------------
 
-map_col, right_col = st.columns([3, 5])
+map_col, right_col = st.columns([4, 6])
 
 with map_col:
     st.subheader("Global Incident Locations")
@@ -483,17 +525,18 @@ with map_col:
                 layers=[layer],
                 initial_view_state=view_state,
                 tooltip=tooltip,
-            )
+            ),
+            height=380
         )
-        
+
         # ------- Color Legend under the map -------
         legend_items = [
             ("Destroyed",   "rgb(220, 20, 60)"),   # strong red
-            ("Missing",     "rgb(139, 0, 0)"),    # dark red
-            ("Substantial", "rgb(255, 140, 0)"),  # orange
-            ("Minor",       "rgb(255, 215, 0)"),  # yellow
-            ("Repairable",  "rgb(60, 179, 113)"), # green
-            ("Unknown",     "rgb(160, 160, 160)") # grey
+            ("Missing",     "rgb(139, 0, 0)"),     # dark red
+            ("Substantial", "rgb(255, 140, 0)"),   # orange
+            ("Minor",       "rgb(255, 215, 0)"),   # yellow
+            ("Repairable",  "rgb(60, 179, 113)"),  # green
+            ("Unknown",     "rgb(160, 160, 160)")  # grey
         ]
 
         cols = st.columns(len(legend_items))
@@ -522,10 +565,103 @@ with map_col:
     else:
         st.info("No incident locations available for the selected filters.")
 
+    # ==========================
+    # Overall statistics + KPI boxes
+    # ==========================
+    if filter_mode == "Single Year":
+        period_label = str(selected_year)
+    else:
+        start, end = selected_range
+        period_label = f"{start} – {end}"
+
+    st.markdown(
+        f"<h4 style='margin-top:0.8rem; margin-bottom:0.6rem;'>"
+        f"Overall Statistics ({period_label})"
+        f"</h4>",
+        unsafe_allow_html=True,
+    )
+
+    total_events = len(filtered_df)
+
+    total_fatalities = (
+        int(filtered_df["Fatalities"].fillna(0).sum())
+        if "Fatalities" in filtered_df.columns
+        else 0
+    )
+
+    total_ground_fatalities = (
+        int(filtered_df["Ground_Casualties"].fillna(0).sum())
+        if "Ground_Casualties" in filtered_df.columns
+        else 0
+    )
+
+    kpi1, kpi2, kpi3 = st.columns(3)
+
+    def kpi_box(col, value, main_label, color):
+        box_html = f"""
+        <div style="
+            background-color:{color};
+            padding:0.6rem 0.4rem;
+            border-radius:0.4rem;
+            text-align:center;
+        ">
+            <div style="font-size:1.9rem; font-weight:700; color:white;">
+                {value:,}
+            </div>
+            <div style="font-size:0.8rem; color:white; text-transform:uppercase; letter-spacing:0.06em;">
+                {main_label}
+            </div>
+        </div>
+        """
+        with col:
+            st.markdown(box_html, unsafe_allow_html=True)
+
+    kpi_box(
+        kpi1,
+        total_events,
+        "EVENTS",
+        "#1f77b4",   # light blue
+    )
+    kpi_box(
+        kpi2,
+        total_fatalities,
+        "FLIGHT FATALITIES",
+        "#1864aa",   # mid blue
+    )
+    kpi_box(
+        kpi3,
+        total_ground_fatalities,
+        "GROUND FATALITIES",
+        "#0f4c81",   # dark blue
+    )
+
+    # -------- Fatalities per incident sentence --------
+    if total_events > 0:
+        fatalities_per_incident = (total_fatalities + total_ground_fatalities) / total_events
+        st.markdown(
+            f"""
+            <p style="text-align:center; font-size:0.9rem; margin-top:0.5rem;">
+                Approximately
+                <b>{fatalities_per_incident:.2f}</b> fatalities per incident in <b>{period_label}</b>.
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            """
+            <p style="text-align:center; font-size:0.9rem; margin-top:0.5rem;">
+                No incidents recorded for this selection.
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 ###############################################################################################
 with right_col:
     # Split right_col into 2 sub-columns
-    trend_col, phase_col = st.columns([1, 1])
+    trend_col, phase_col = st.columns([8, 6])
 
     # ==========================
     # 1) Incidents vs Year (left)
@@ -582,7 +718,7 @@ with right_col:
                 )
 
                 fig_trend.update_layout(
-                    margin=dict(l=10, r=10, t=10, b=10),
+                    margin=dict(l=10, r=10, t=10, b=0),
                     xaxis_title="Year",
                     yaxis_title="Incident Count",
                     height=260,
@@ -595,101 +731,95 @@ with right_col:
                 ymax = yearly_totals["Count"].max()
                 fig_trend.update_yaxes(range=[0, ymax * 1.1])
 
-                st.plotly_chart(fig_trend, use_container_width=True)
+                st.plotly_chart(fig_trend, use_container_width=True, config={"staticPlot": True})
         else:
             st.info("No year or damage data available.")
 
-        # ==========================
-        # Overall statistics + KPI boxes
-        # ==========================
-        if filter_mode == "Single Year":
-            period_label = str(selected_year)
+        # ==============================
+        # Cause distribution bar chart
+        # ==============================
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("Likely Accident Causes")
+
+        cause_cols = [
+            "is_engine_cause",
+            "is_model_cause",
+            "is_human_cause",
+            "is_weather_cause",
+            "is_wildlife_cause",
+            "is_ground_collision",
+            "is_unknown_cause",
+        ]
+
+        # pretty display labels (in the exact order you requested)
+        label_map = {
+            "is_engine_cause": "Engine Failure",
+            "is_model_cause": "Aircraft Design",
+            "is_human_cause": "Human Error",
+            "is_weather_cause": "Bad Weather",
+            "is_wildlife_cause": "Wildlife Strike",
+            "is_ground_collision": "Ground Collision",
+            "is_unknown_cause": "Unknown Cause",
+        }
+
+        existing_cols = [c for c in cause_cols if c in filtered_df.columns]
+
+        if not existing_cols:
+            st.info("No cause flags available for the current dataset.")
         else:
-            start, end = selected_range
-            period_label = f"{start} – {end}"
+            cause_counts = filtered_df[existing_cols].sum().astype(int)
 
-        st.markdown(
-            f"<h4 style='margin-top:0.8rem; margin-bottom:0.6rem;'>"
-            f"Overall Statistics ({period_label})"
-            f"</h4>",
-            unsafe_allow_html=True,
-        )
-
-        total_events = len(filtered_df)
-
-        total_fatalities = (
-            int(filtered_df["Fatalities"].fillna(0).sum())
-            if "Fatalities" in filtered_df.columns
-            else 0
-        )
-
-        total_ground_fatalities = (
-            int(filtered_df["Ground_Casualties"].fillna(0).sum())
-            if "Ground_Casualties" in filtered_df.columns
-            else 0
-        )
-
-        kpi1, kpi2, kpi3 = st.columns(3)
-
-        def kpi_box(col, value, main_label, color):
-            box_html = f"""
-            <div style="
-                background-color:{color};
-                padding:0.6rem 0.4rem;
-                border-radius:0.4rem;
-                text-align:center;
-            ">
-                <div style="font-size:1.9rem; font-weight:700; color:white;">
-                    {value:,}
-                </div>
-                <div style="font-size:0.8rem; color:white; text-transform:uppercase; letter-spacing:0.06em;">
-                    {main_label}
-                </div>
-            </div>
-            """
-            with col:
-                st.markdown(box_html, unsafe_allow_html=True)
-
-        kpi_box(
-            kpi1,
-            total_events,
-            "EVENTS",
-            "#1f77b4",   # light blue
-        )
-        kpi_box(
-            kpi2,
-            total_fatalities,
-            "FLIGHT FATALITIES",
-            "#1864aa",   # mid blue
-        )
-        kpi_box(
-            kpi3,
-            total_ground_fatalities,
-            "GROUND FATALITIES",
-            "#0f4c81",   # dark blue
-        )
-
-        # -------- Fatalities per incident sentence --------
-        if total_events > 0:
-            fatalities_per_incident = (total_fatalities + total_ground_fatalities) / total_events
-            st.markdown(
-                f"""
-                <p style="text-align:center; font-size:0.9rem; margin-top:0.5rem;">
-                    Approximately
-                    <b>{fatalities_per_incident:.2f}</b> fatalities per incident in <b>{period_label}</b>.
-                </p>
-                """,
-                unsafe_allow_html=True,
+            cause_df = (
+                cause_counts
+                .reset_index()
+                .rename(columns={"index": "Flag", 0: "Count"})
             )
-        else:
-            st.markdown(
-                """
-                <p style="text-align:center; font-size:0.9rem; margin-top:0.5rem;">
-                    No incidents recorded for this selection.
-                </p>
-                """,
-                unsafe_allow_html=True,
+            cause_df["Cause"] = cause_df["Flag"].map(label_map)
+
+            # apply the fixed display order
+            cause_df["Cause"] = pd.Categorical(
+                cause_df["Cause"],
+                categories=[
+                    "Engine Failure",
+                    "Aircraft Design",
+                    "Human Error",
+                    "Bad Weather",
+                    "Wildlife Strike",
+                    "Ground Collision",
+                    "Unknown Cause",
+                ],
+                ordered=True,
             )
+            cause_df = cause_df.sort_values("Cause")
+
+            # nice sequential colors
+            sequential_colors = px.colors.sequential.Blues[2:]   # skip pale ones
+
+            fig_cause = px.bar(
+                cause_df,
+                x="Cause",
+                y="Count",
+                text="Count",
+                color="Cause",
+                color_discrete_sequence=sequential_colors,
+            )
+            fig_cause.update_traces(textposition="outside")
+            fig_cause.update_layout(
+                height=260,
+                margin=dict(l=10, r=10, t=5, b=60),
+                xaxis_title="",
+                yaxis_title="Number of Incidents",
+                showlegend=False,
+            )
+
+            st.plotly_chart(fig_cause, use_container_width=True, config={"staticPlot": True})
+
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c2:
+                if st.button("More details on accident causes"):
+                    st.session_state["view"] = "details"
+                    st.rerun()
+
 
 
     # ==============================
@@ -836,250 +966,164 @@ with right_col:
                     paper_bgcolor="rgba(0,0,0,0)",
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, config={"staticPlot": True})
         else:
             st.info("No phase-of-flight information available.")
 
-        # ==============================
-        # Cause distribution bar chart
-        # ==============================
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.subheader("Likely Accident Causes")
+        
+        # --------------------------------------------
+        # Damage hotspot plane heatmap
+        # --------------------------------------------
 
-        cause_cols = [
-            "is_engine_cause",
-            "is_model_cause",
-            "is_human_cause",
-            "is_weather_cause",
-            "is_wildlife_cause",
-            "is_ground_collision",
-            "is_unknown_cause",
-        ]
+        st.subheader("Frequent Damage Hotspots")
 
-        # pretty display labels (in the exact order you requested)
-        label_map = {
-            "is_engine_cause": "Engine Failure",
-            "is_model_cause": "Aircraft Design",
-            "is_human_cause": "Human Error",
-            "is_weather_cause": "Bad Weather",
-            "is_wildlife_cause": "Wildlife Strike",
-            "is_ground_collision": "Ground Collision",
-            "is_unknown_cause": "Unknown Cause",
-        }
-
-        existing_cols = [c for c in cause_cols if c in filtered_df.columns]
-
-        if not existing_cols:
-            st.info("No cause flags available for the current dataset.")
+        if "Damage_Areas" not in filtered_df.columns:
+            st.info("No damage area information available in the current dataset.")
         else:
-            cause_counts = filtered_df[existing_cols].sum().astype(int)
+            area_counter = Counter()
 
-            cause_df = (
-                cause_counts
-                .reset_index()
-                .rename(columns={"index": "Flag", 0: "Count"})
-            )
-            cause_df["Cause"] = cause_df["Flag"].map(label_map)
+            # ---------- normalize raw area strings/lists ----------
+            def normalize_areas(val):
+                if val is None:
+                    return []
+                if isinstance(val, float) and pd.isna(val):
+                    return []
+                if isinstance(val, (list, tuple)) and len(val) == 0:
+                    return []
+                if hasattr(val, "size") and getattr(val, "size", None) == 0:
+                    return []
 
-            # apply the fixed display order
-            cause_df["Cause"] = pd.Categorical(
-                cause_df["Cause"],
-                categories=[
-                    "Engine Failure",
-                    "Aircraft Design",
-                    "Human Error",
-                    "Bad Weather",
-                    "Wildlife Strike",
-                    "Ground Collision",
-                    "Unknown Cause",
-                ],
-                ordered=True,
-            )
-            cause_df = cause_df.sort_values("Cause")
-
-            # nice sequential colors
-            sequential_colors = px.colors.sequential.Blues[2:]   # skip pale ones
-
-            fig_cause = px.bar(
-                cause_df,
-                x="Cause",
-                y="Count",
-                text="Count",
-                color="Cause",
-                color_discrete_sequence=sequential_colors,
-            )
-            fig_cause.update_traces(textposition="outside")
-            fig_cause.update_layout(
-                height=260,
-                margin=dict(l=10, r=10, t=10, b=60),
-                xaxis_title="",
-                yaxis_title="Number of Incidents",
-                showlegend=False,
-            )
-
-            st.plotly_chart(fig_cause, use_container_width=True)
-
-            if st.button("More details on accident causes"):
-                st.session_state["view"] = "details"
-                st.rerun()
-
-
-
-
-
-# --------------------------------------------
-# Damage hotspot plane heatmap
-# --------------------------------------------
-
-blank1, plane, blank2 = st.columns([2, 8, 2])        
-
-with plane:
-    # st.subheader("Damage Hotspots on Aircraft")
-
-    if "Damage_Areas" not in filtered_df.columns:
-        st.info("No damage area information available in the current dataset.")
-    else:
-        area_counter = Counter()
-
-        # ---------- normalize raw area strings/lists ----------
-        def normalize_areas(val):
-            if val is None:
-                return []
-            if isinstance(val, float) and pd.isna(val):
-                return []
-            if isinstance(val, (list, tuple)) and len(val) == 0:
-                return []
-            if hasattr(val, "size") and getattr(val, "size", None) == 0:
-                return []
-
-            if isinstance(val, (list, tuple)):
-                raw_list = val
-            else:
-                try:
-                    raw_list = ast.literal_eval(val)
-                except Exception:
-                    raw_list = [str(val)]
-
-            normed = []
-            for a in raw_list:
-                s = str(a).strip().lower()
-                if "engine" in s:
-                    normed.append("Engine")
-                elif "wing" in s:
-                    normed.append("Wing")
-                elif "tail" in s or "empennage" in s:
-                    normed.append("Tail")
-                elif "nose" in s or "cockpit" in s:
-                    normed.append("Nose")
-                elif "fuselage" in s or "body" in s:
-                    normed.append("Fuselage")
-                elif "gear" in s or "landing" in s:
-                    normed.append("Landing Gear")
+                if isinstance(val, (list, tuple)):
+                    raw_list = val
                 else:
-                    normed.append("Other")
-            return normed
+                    try:
+                        raw_list = ast.literal_eval(val)
+                    except Exception:
+                        raw_list = [str(val)]
 
-        for v in filtered_df["Damage_Areas"]:
-            for area in normalize_areas(v):
-                area_counter[area] += 1
+                normed = []
+                for a in raw_list:
+                    s = str(a).strip().lower()
+                    if "engine" in s:
+                        normed.append("Engine")
+                    elif "wing" in s:
+                        normed.append("Wing")
+                    elif "tail" in s or "empennage" in s:
+                        normed.append("Tail")
+                    elif "nose" in s or "cockpit" in s:
+                        normed.append("Nose")
+                    elif "fuselage" in s or "body" in s:
+                        normed.append("Fuselage")
+                    elif "gear" in s or "landing" in s:
+                        normed.append("Landing Gear")
+                    else:
+                        normed.append("Other")
+                return normed
 
-        if not area_counter:
-            st.info("No damage areas recorded for the selected filters.")
-        else:
-            # canonical zones we’ll show
-            logical_zones = ["Nose", "Fuselage", "Tail", "Wing", "Engine", "Landing Gear"]
+            for v in filtered_df["Damage_Areas"]:
+                for area in normalize_areas(v):
+                    area_counter[area] += 1
 
-            counts = {z: area_counter.get(z, 0) for z in logical_zones}
-            max_c = max(counts.values()) if max(counts.values()) > 0 else 1
+            if not area_counter:
+                st.info("No damage areas recorded for the selected filters.")
+            else:
+                # canonical zones we’ll show
+                logical_zones = ["Nose", "Fuselage", "Tail", "Wing", "Engine", "Landing Gear"]
 
-            # ---------- plane image as background ----------
-            plane_img = load_plane_image()
+                counts = {z: area_counter.get(z, 0) for z in logical_zones}
+                max_c = max(counts.values()) if max(counts.values()) > 0 else 1
 
-            fig = go.Figure()
-            fig.add_layout_image(
-                dict(
-                    source=plane_img,
-                    xref="x",
-                    yref="y",
-                    x=0,
-                    y=1,
-                    sizex=1,
-                    sizey=1,
-                    sizing="stretch",
-                    layer="below",
+                # ---------- plane image as background ----------
+                plane_img = load_plane_image()
+
+                fig = go.Figure()
+                fig.add_layout_image(
+                    dict(
+                        source=plane_img,
+                        xref="x",
+                        yref="y",
+                        x=0,
+                        y=1,
+                        sizex=1,
+                        sizey=1,
+                        sizing="stretch",
+                        layer="below",
+                    )
                 )
-            )
 
-            fig.update_xaxes(visible=False, range=[0, 1])
-            fig.update_yaxes(visible=False, range=[0, 1], scaleanchor="x", scaleratio=1)
+                fig.update_xaxes(visible=False, range=[0, 1])
+                fig.update_yaxes(visible=False, range=[0, 1], scaleanchor="x", scaleratio=1)
 
-            fig.update_layout(
-                height=280,
-                margin=dict(l=10, r=10, t=10, b=10),
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                showlegend=False,
-            )
-
-            # ---------- define blob positions on the image ----------
-            # coordinates in normalized [0,1] plane space
-            blob_positions = {
-                "Nose":        (0.5, 0.90),
-                "Fuselage":    (0.5, 0.60),
-                "Tail":        (0.5, 0.15),
-                "Left Wing":   (0.20, 0.55),
-                "Right Wing":  (0.80, 0.55),
-                "Engines":     (0.5, 0.68),
-                "Landing Gear":(0.5, 0.28),
-            }
-
-            # map counts to those positions
-            zone_counts_for_plot = {
-                "Nose":        counts["Nose"],
-                "Fuselage":    counts["Fuselage"],
-                "Tail":        counts["Tail"],
-                "Left Wing":   counts["Wing"],
-                "Right Wing":  counts["Wing"],
-                "Engines":     counts["Engine"],
-                "Landing Gear":counts["Landing Gear"],
-            }
-
-            names = []
-            xs = []
-            ys = []
-            vals = []
-
-            for name, (x, y) in blob_positions.items():
-                names.append(name)
-                xs.append(x)
-                ys.append(y)
-                vals.append(zone_counts_for_plot.get(name, 0))
-
-            max_val = max(vals) if max(vals) > 0 else 1
-
-            # blob sizes: base + scaled
-            sizes = [25 + 40 * (v / max_val) if v > 0 else 0 for v in vals]
-
-            # ---------- add blobs ----------
-            fig.add_trace(
-                go.Scatter(
-                    x=xs,
-                    y=ys,
-                    mode="markers+text",
-                    text=[f"{n}<br>{v}" for n, v in zip(names, vals)],
-                    textposition="middle center",
-                    hovertemplate="%{text}<extra></extra>",
-                    marker=dict(
-                        size=sizes,
-                        color=vals,
-                        colorscale="Reds",
-                        cmin=0,
-                        cmax=max_val,
-                        opacity=0.75,
-                        line=dict(width=0),
-                    ),
-                    textfont=dict(color="white", size=10),
+                fig.update_layout(
+                    height=280,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    showlegend=False,
                 )
-            )
 
-            st.plotly_chart(fig, use_container_width=True)
+                # ---------- define blob positions on the image ----------
+                # coordinates in normalized [0,1] plane space
+                blob_positions = {
+                    "Nose":        (0.5, 0.90),
+                    "Fuselage":    (0.5, 0.60),
+                    "Tail":        (0.5, 0.15),
+                    "Left Wing":   (0.20, 0.55),
+                    "Right Wing":  (0.80, 0.55),
+                    "Engines":     (0.5, 0.68),
+                    "Landing Gear":(0.5, 0.28),
+                }
+
+                # map counts to those positions
+                zone_counts_for_plot = {
+                    "Nose":        counts["Nose"],
+                    "Fuselage":    counts["Fuselage"],
+                    "Tail":        counts["Tail"],
+                    "Left Wing":   counts["Wing"],
+                    "Right Wing":  counts["Wing"],
+                    "Engines":     counts["Engine"],
+                    "Landing Gear":counts["Landing Gear"],
+                }
+
+                names = []
+                xs = []
+                ys = []
+                vals = []
+
+                for name, (x, y) in blob_positions.items():
+                    names.append(name)
+                    xs.append(x)
+                    ys.append(y)
+                    vals.append(zone_counts_for_plot.get(name, 0))
+
+                max_val = max(vals) if max(vals) > 0 else 1
+
+                # blob sizes: base + scaled
+                sizes = [25 + 40 * (v / max_val) if v > 0 else 0 for v in vals]
+
+                # ---------- add blobs ----------
+                fig.add_trace(
+                    go.Scatter(
+                        x=xs,
+                        y=ys,
+                        mode="markers+text",
+                        text=[f"{n}<br>{v}" for n, v in zip(names, vals)],
+                        textposition="middle center",
+                        hovertemplate="%{text}<extra></extra>",
+                        marker=dict(
+                            size=sizes,
+                            color=vals,
+                            colorscale="Reds",
+                            cmin=0,
+                            cmax=max_val,
+                            opacity=0.75,
+                            line=dict(width=0),
+                        ),
+                        textfont=dict(color="white", size=10),
+                    )
+                )
+
+                st.plotly_chart(fig, use_container_width=True, config={"staticPlot": True})
+
+
+
