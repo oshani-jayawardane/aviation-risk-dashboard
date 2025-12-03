@@ -838,8 +838,15 @@ with right_col:
             )
             cause_df = cause_df.sort_values("Cause")
 
-            # nice sequential colors
-            sequential_colors = px.colors.sequential.Blues[2:]   # skip pale ones
+            # color according to rank
+            ranked = cause_df.sort_values("Count", ascending=False)
+            sequential_colors = px.colors.sequential.Blues[2:]
+            colors_for_used = sequential_colors[-len(ranked):]
+            
+            color_map = {
+                cause: colors_for_used[i]
+                for i, cause in enumerate(ranked["Cause"])
+            }
 
             fig_cause = px.bar(
                 cause_df,
@@ -847,7 +854,7 @@ with right_col:
                 y="Count",
                 text="Count",
                 color="Cause",
-                color_discrete_sequence=sequential_colors,
+                color_discrete_map=color_map,
             )
             fig_cause.update_traces(textposition="outside")
             fig_cause.update_layout(
